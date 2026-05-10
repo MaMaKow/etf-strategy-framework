@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "etf-backtest"
+version = "0.1.0"
+description = "Quantitative ETF backtesting framework with SDA strategy"
+authors = [{name = "Martin Mandelkow", email = "github@martin-mandelkow.de"}]
+dependencies = [
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "yfinance",
+]
+requires-python = ">=3.8"
+
+[project.scripts]
+etf-backtest = "etf.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["etf*"]

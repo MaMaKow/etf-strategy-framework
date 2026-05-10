@@ -1,2 +1,16 @@
 .env
 venv
+
+sda_equity_curve.png
+sda_sweep_results.csv
+sda_trades.csv
+etf_sda_backtest_original.py
+
+.vscode/settings.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
