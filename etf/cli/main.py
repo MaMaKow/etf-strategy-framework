@@ -1,26 +1,35 @@
+import argparse
 import csv
 import logging
 import sys
-from pathlib import Path
-from typing import List
+from typing import Dict, List
 
-from ..models import Trade
 from ..analytics.metrics import compute_kpis
-from ..analytics.reports import plot_equity_curve, print_kpi_summary
+from ..analytics.reports import plot_comparison_equity, plot_equity_curve, print_kpi_summary
+from ..backtest.comparison import BacktestComparison
 from ..backtest.engine import BacktestEngine
 from ..backtest.sweep import parameter_sweep
-from ..config import SDAConfig
+from ..config import BacktestConfig, SDAConfig
+from ..models import Trade
+from ..strategies.dca import DollarCostAveragingStrategy
 from ..strategies.sda import SDAStrategy
+from ..strategies.value_averaging import ValueAveragingStrategy
+
+
+STRATEGY_REGISTRY = {
+    "sda": SDAStrategy,
+    "dca": DollarCostAveragingStrategy,
+    "value_averaging": ValueAveragingStrategy,
+}
 
 
 def setup_logging(level: str) -> logging.Logger:
-    logger = logging.getLogger("SDA")
+    logger = logging.getLogger("ETF")
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
     if not logger.handlers:
-        h = logging.StreamHandler(sys.stdout)
-        h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s",
-                                         datefmt="%Y-%m-%d %H:%M:%S"))
-        logger.addHandler(h)
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+        logger.addHandler(handler)
     return logger
 
 
@@ -35,60 +44,100 @@ def export_trades_csv(trades: List[Trade], path: str) -> None:
     print(f"  [Trade log saved → {path}]")
 
 
-def main(run_sweep: bool = False) -> None:
+def build_config(args: argparse.Namespace) -> BacktestConfig:
     cfg = SDAConfig(
-        etf_ticker="EUNL.DE",
-        start_date="2014-01-01",
-        end_date="2024-12-31",
-        monthly_savings=1000.0,
-        ocf_target=5000.0,
-        vix_threshold=15.0,
-        min_order_eur=500.0,
-        slippage=0.0005,
-        log_level="INFO",
-        export_trades_csv="sda_trades.csv",
+        etf_ticker=args.ticker,
+        vix_ticker=args.vix_ticker,
+        start_date=args.start,
+        end_date=args.end,
+        monthly_savings=args.monthly,
+        ocf_target=args.ocf_target,
+        min_order_eur=args.min_order,
+        slippage=args.slippage,
+        log_level=args.log_level,
+        export_trades_csv=args.export_trades_csv or "",
+        value_averaging_mode=args.va_mode,
+        value_averaging_base=args.va_base,
+        value_averaging_growth_rate=args.va_rate,
+        value_averaging_allow_negative=args.va_allow_negative,
     )
+    return cfg
 
-    logger = setup_logging(cfg.log_level)
 
-    logger.info("═══════════════════════════════════════════════")
-    logger.info("   Systematic Drawdown Accumulator  v2.0")
-    logger.info("   ETF   : %s", cfg.etf_ticker)
-    logger.info("   Period: %s → %s", cfg.start_date, cfg.end_date)
-    logger.info("   OCF target  : %.0f EUR", cfg.ocf_target)
-    logger.info("   Monthly sav : %.0f EUR", cfg.monthly_savings)
-    logger.info("   VIX filter  : > %.1f", cfg.vix_threshold)
-    logger.info("   Min order   : %.0f EUR", cfg.min_order_eur)
-    logger.info("   Slippage    : %.2f %%", cfg.slippage * 100)
-    logger.info("═══════════════════════════════════════════════")
+def make_strategy(name: str, cfg: BacktestConfig):
+    name = name.strip().lower()
+    if name not in STRATEGY_REGISTRY:
+        raise ValueError(f"Unknown strategy: {name}")
+    return STRATEGY_REGISTRY[name](cfg)
 
-    strategy = SDAStrategy(cfg)
+
+def run_single_strategy(cfg: BacktestConfig, strategy_name: str, logger: logging.Logger) -> None:
+    strategy = make_strategy(strategy_name, cfg)
     engine = BacktestEngine(cfg, strategy, logger)
     equity, trades = engine.run()
-
-    kpis = compute_kpis(equity, trades, engine.portfolio.state, cfg)
+    kpis = compute_kpis(equity, trades, engine.portfolio.state, cfg, strategy_name=strategy_name)
     print_kpi_summary(kpis, cfg)
-
     if cfg.export_trades_csv:
         export_trades_csv(trades, cfg.export_trades_csv)
+    plot_equity_curve(equity, trades, cfg, strategy_name)
 
-    plot_equity_curve(equity, trades, cfg)
 
-    if run_sweep:
-        logger.info("Starting parameter sweep …")
-        sweep_df = parameter_sweep(
-            cfg, logger,
-            ocf_targets=[3000.0, 5000.0, 8000.0],
-            monthly_savings_list=[500.0, 1000.0, 2000.0],
-            vix_thresholds=[12.0, 15.0, 20.0],
-        )
-        sweep_path = "sda_sweep_results.csv"
-        sweep_df.to_csv(sweep_path, index=False)
-        print(f"\n  Top 5 sweep results (by Sharpe):")
-        print(sweep_df.head(5).to_string(index=False))
-        print(f"\n  [Full sweep saved → {sweep_path}]")
+def run_comparison(cfg: BacktestConfig, strategy_names: List[str], logger: logging.Logger) -> None:
+    strategies = {name: make_strategy(name, cfg) for name in strategy_names}
+    comparison = BacktestComparison(cfg, strategies, logger=logger)
+    results = comparison.run()
+    summary_df = BacktestComparison.build_summary(results)
+    print(summary_df.to_string(float_format="{:.4f}".format))
+    plot_comparison_equity([{"strategy": r.strategy_name, "equity": r.equity} for r in results], cfg)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="ETF strategy comparison CLI")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--ticker", default="EUNL.DE")
+    common.add_argument("--vix-ticker", default="^VIX")
+    common.add_argument("--start", default="2014-01-01")
+    common.add_argument("--end", default="2024-12-31")
+    common.add_argument("--monthly", type=float, default=1000.0)
+    common.add_argument("--min-order", type=float, default=500.0)
+    common.add_argument("--slippage", type=float, default=0.0005)
+    common.add_argument("--log-level", default="INFO")
+    common.add_argument("--export-trades-csv", default="")
+    common.add_argument("--ocf-target", type=float, default=5000.0)
+    common.add_argument("--va-mode", choices=["linear", "exponential"], default="linear")
+    common.add_argument("--va-base", type=float, default=1000.0)
+    common.add_argument("--va-rate", type=float, default=0.0)
+    common.add_argument("--va-allow-negative", action="store_true")
+
+    parser_run = subparsers.add_parser("run", parents=[common], help="Run one strategy")
+    parser_run.add_argument("--strategy", choices=list(STRATEGY_REGISTRY), required=True)
+
+    parser_compare = subparsers.add_parser("compare", parents=[common], help="Compare multiple strategies")
+    parser_compare.add_argument("--strategies", required=True, help="Comma-separated strategy keys")
+
+    parser_sweep = subparsers.add_parser("sweep", parents=[common], help="Sweep strategy parameters")
+    parser_sweep.add_argument("--strategy", choices=list(STRATEGY_REGISTRY), required=True)
+
+    args = parser.parse_args()
+    logger = setup_logging(args.log_level)
+    cfg = build_config(args)
+
+    if args.command == "run":
+        run_single_strategy(cfg, args.strategy, logger)
+    elif args.command == "compare":
+        names = [name.strip() for name in args.strategies.split(",") if name.strip()]
+        run_comparison(cfg, names, logger)
+    elif args.command == "sweep":
+        strategy = make_strategy(args.strategy, cfg)
+        sweep_df = parameter_sweep(cfg, logger, strategy_factories={args.strategy: lambda cfg_: strategy.__class__(cfg_)})
+        output_path = f"{args.strategy}_sweep_results.csv"
+        sweep_df.to_csv(output_path, index=False)
+        print(f"\n  [Sweep results saved → {output_path}]")
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":
-    _sweep = "--sweep" in sys.argv
-    main(run_sweep=_sweep)
+    main()

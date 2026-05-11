@@ -21,3 +21,7 @@ etf-backtest = "etf.cli.main:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["etf*"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+xirr = ["pyxirr"]

@@ -14,6 +14,7 @@ class Order:
     tier: str
     drawdown: Optional[float] = None
     vix: Optional[float] = None
+    cooldown_days: Optional[int] = None
 
 
 @dataclass
@@ -53,34 +54,51 @@ class State:
     cash_ocf: float = 0.0
     units: float = 0.0
     portfolio_value: float = 0.0
-    cooldowns: Dict[str, int] = field(default_factory=dict)   # tier_label → days left
-    total_ocf_inflow: float = 0.0  # Summe aller Sparraten-Anteile, die in den Cash-Puffer gingen
+    cooldowns: Dict[str, int] = field(default_factory=dict)
+    total_contributions: float = 0.0
+    total_cashflow: float = 0.0
 
 
 @dataclass
 class KPIReport:
+    strategy_name: str
     cagr: float
-    max_drawdown: float
+    twrr: float
+    xirr: float
     sharpe_ratio: float
+    sortino_ratio: float
+    max_drawdown: float
+    volatility: float
+    ulcer_index: float
     final_portfolio_value: float
     total_invested: float
     absolute_return_eur: float
-    dip_buys_count: int
-    total_dip_eur_deployed: float
     cash_utilization_rate: float
-    avg_dip_buy_price: float
-    avg_sma200: float
-    ocf_depletion_days: int
+    time_invested_ratio: float
+    number_of_trades: int
+    avg_buy_price: float
+    total_cashflows: float
 
 
 @dataclass
 class SweepResult:
-    ocf_target: float
-    monthly_savings: float
-    vix_threshold: float
+    strategy: str
+    parameter_set: Dict[str, float]
     cagr: float
-    max_dd: float
+    twrr: float
+    xirr: float
     sharpe: float
+    sortino: float
+    max_dd: float
     final_pv: float
-    dip_buys: int
+    total_invested: float
     cash_util: float
+    trades: int
+
+
+@dataclass
+class BacktestResult:
+    strategy_name: str
+    equity: object
+    trades: List[Trade]
+    kpis: KPIReport

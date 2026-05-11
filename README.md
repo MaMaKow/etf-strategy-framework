@@ -32,7 +32,14 @@ python -m etf.cli.main --sweep
 
 ## Configuration
 
-Edit `etf/config.py` or pass configuration via CLI (future feature).
+Edit `etf/config.py` or pass configuration via CLI.
+
+### Value Averaging Parameters
+
+- `--va-mode`: `linear` or `exponential` (default: `linear`)
+- `--va-base`: starting target amount for VA; if not set, defaults to `monthly_contribution`
+- `--va-rate`: growth rate for exponential VA (default: `0.0`)
+- `--va-allow-negative`: allow negative adjustments / de-risking actions (default: buy-only)
 
 ## Architecture
 

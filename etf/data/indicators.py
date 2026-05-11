@@ -1,9 +1,9 @@
 import pandas as pd
 
-from ..config import SDAConfig
+from ..config import BacktestConfig
 
 
-def compute_indicators(df: pd.DataFrame, vix: pd.Series, cfg: SDAConfig) -> pd.DataFrame:
+def compute_indicators(df: pd.DataFrame, vix: pd.Series, cfg: BacktestConfig) -> pd.DataFrame:
     """Vectorised pre-computation of all strategy signals."""
     df = df.copy()
     close = df["close"]

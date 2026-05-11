@@ -1,21 +1,26 @@
+from __future__ import annotations
+
 import math
+from datetime import datetime
+from typing import List, Optional
+
 import numpy as np
 import pandas as pd
-from typing import List
 
-from ..config import SDAConfig
+from ..config import BacktestConfig
 from ..models import KPIReport, State, Trade
-from ..portfolio.portfolio import Portfolio
 
 
-def calculate_cagr(equity: pd.Series) -> float:
-    active = equity[equity > 0]
-    if active.empty or len(active) < 2:
+def _annualize_return(total_return: float, days: int) -> float:
+    if days <= 0:
         return 0.0
-    years = (active.index[-1] - active.index[0]).days / 365.25
-    if years <= 0:
-        return 0.0
-    return (active.iloc[-1] / active.iloc[0]) ** (1 / years) - 1
+    return (1.0 + total_return) ** (252.0 / days) - 1.0
+
+
+def calculate_cagr(equity: pd.Series, cashflows: pd.Series) -> float:
+    total_return = calculate_twrr(equity, cashflows)
+    days = (equity.index[-1] - equity.index[0]).days
+    return _annualize_return(total_return, days)
 
 
 def calculate_max_drawdown(equity: pd.Series) -> float:
@@ -24,52 +29,159 @@ def calculate_max_drawdown(equity: pd.Series) -> float:
     return float(dd.min())
 
 
+def calculate_annualized_volatility(equity: pd.Series) -> float:
+    daily_ret = equity.pct_change().dropna()
+    if daily_ret.empty:
+        return 0.0
+    return float(daily_ret.std() * math.sqrt(252.0))
+
+
 def calculate_sharpe(equity: pd.Series, rf: float = 0.02) -> float:
     daily_ret = equity.pct_change().dropna()
-    excess = daily_ret - rf / 252
-    if excess.std() == 0:
-        return float("nan")
-    return float(excess.mean() / excess.std() * math.sqrt(252))
+    if daily_ret.empty or daily_ret.std() == 0:
+        return 0.0
+    excess = daily_ret - rf / 252.0
+    return float(excess.mean() / excess.std() * math.sqrt(252.0))
 
 
-def compute_kpis(equity: pd.DataFrame, trades: List[Trade], final_state: State, cfg: SDAConfig) -> KPIReport:
+def calculate_sortino(equity: pd.Series, rf: float = 0.02) -> float:
+    daily_ret = equity.pct_change().dropna()
+    if daily_ret.empty:
+        return 0.0
+    downside = daily_ret[daily_ret < 0.0]
+    if downside.empty:
+        return float('inf')
+    downside_std = downside.std()
+    if downside_std == 0:
+        return float('inf')
+    excess = daily_ret.mean() - rf / 252.0
+    return float(excess / downside_std * math.sqrt(252.0))
+
+
+def calculate_ulcer_index(equity: pd.Series) -> float:
+    peak = equity.cummax()
+    drawdown = (equity - peak) / peak
+    ulcer = np.sqrt((drawdown.clip(upper=0.0) ** 2).mean())
+    return float(abs(ulcer))
+
+
+def calculate_time_invested_ratio(equity: pd.DataFrame) -> float:
+    if equity.empty:
+        return 0.0
+    invested_days = int((equity['units'] > 0).sum())
+    return float(invested_days / len(equity))
+
+
+def calculate_twrr(equity: pd.Series, cashflows: pd.Series) -> float:
+    if equity.empty:
+        return 0.0
+
+    cashflows = cashflows.reindex(equity.index, fill_value=0.0)
+    returns = []
+    prev_value = equity.iloc[0]
+
+    for current_date, current_value in equity.iloc[1:].items():
+        cashflow = cashflows.loc[current_date]
+        if prev_value <= 0:
+            prev_value = current_value
+            continue
+        period_return = (current_value - prev_value - cashflow) / prev_value
+        returns.append(period_return)
+        prev_value = current_value
+
+    if not returns:
+        return 0.0
+    total_return = np.prod([1.0 + r for r in returns]) - 1.0
+    return float(total_return)
+
+
+def _xnpv(rate: float, cashflows: List[tuple[datetime, float]]) -> float:
+    start = cashflows[0][0]
+    total = 0.0
+    for when, amount in cashflows:
+        year_frac = (when - start).days / 365.25
+        total += amount / ((1.0 + rate) ** year_frac)
+    return total
+
+
+def calculate_xirr(cashflows: pd.Series, final_value: Optional[float] = None) -> float:
+    flows = []
+    for date, amount in cashflows.items():
+        if amount == 0.0:
+            continue
+        flows.append((date.to_pydatetime(), -amount))
+
+    if final_value is not None:
+        flows.append((cashflows.index[-1].to_pydatetime(), final_value))
+
+    if len(flows) < 2:
+        return 0.0
+
+    try:
+        import pyxirr
+
+        return float(pyxirr.xirr({when: amount for when, amount in flows}))
+    except Exception:
+        pass
+
+    def npv(rate: float) -> float:
+        return sum(amount / ((1.0 + rate) ** ((when - flows[0][0]).days / 365.25)) for when, amount in flows)
+
+    def npv_derivative(rate: float) -> float:
+        return sum(
+            -amount * ((when - flows[0][0]).days / 365.25)
+            / ((1.0 + rate) ** (((when - flows[0][0]).days / 365.25) + 1.0))
+            for when, amount in flows
+        )
+
+    rate = 0.1
+    for _ in range(100):
+        value = npv(rate)
+        derivative = npv_derivative(rate)
+        if derivative == 0:
+            break
+        new_rate = rate - value / derivative
+        if abs(rate - new_rate) < 1e-8:
+            rate = new_rate
+            break
+        rate = new_rate
+    return float(rate)
+
+
+def compute_kpis(equity: pd.DataFrame, trades: List[Trade], final_state: State, cfg: BacktestConfig, strategy_name: str = "strategy") -> KPIReport:
     pv = equity["portfolio_value"]
+    cashflows = equity["cashflow"] if "cashflow" in equity.columns else pd.Series(0.0, index=equity.index)
+    twrr = calculate_twrr(pv, cashflows)
+    cagr = calculate_cagr(pv, cashflows)
+    xirr = calculate_xirr(cashflows, float(pv.iloc[-1]))
 
-    # Total invested
-    total_months = (
-        (equity.index[-1].year - equity.index[0].year) * 12
-        + equity.index[-1].month - equity.index[0].month + 1
-    )
-    total_invested = total_months * cfg.monthly_savings
+    avg_buy_price = 0.0
+    total_units = 0.0
+    if trades:
+        total_units = sum(t.units for t in trades if t.units > 0)
+        total_amount = sum(t.amount_eur for t in trades if t.units > 0)
+        avg_buy_price = (total_amount / total_units) if total_units > 0 else 0.0
 
-    # Dip trades only
-    dip_trades = [t for t in trades if t.tier.startswith("T")]
-
-    # Cash utilization
-    total_dip_eur = sum(t.amount_eur for t in dip_trades)
-    cash_util = total_dip_eur / final_state.total_ocf_inflow if final_state.total_ocf_inflow > 0 else 0.0
-
-    # Average dip buy price vs SMA200
-    dip_prices = [t.price for t in dip_trades if t.price]
-    avg_dip_price = float(np.mean(dip_prices)) if dip_prices else float("nan")
-
-    # Approximate average SMA200
-    avg_sma200 = float(equity["close"].rolling(200, min_periods=1).mean().mean())
-
-    # OCF depletion
-    ocf_depletion_days = int((equity["cash_ocf"] < 0.10 * cfg.ocf_target).sum())
+    cash_util = 0.0
+    if pv.mean() > 0:
+        cash_util = 1.0 - float(equity["cash_ocf"].mean() / pv.mean())
 
     return KPIReport(
-        cagr=calculate_cagr(pv),
-        max_drawdown=calculate_max_drawdown(pv),
+        strategy_name=strategy_name,
+        cagr=cagr,
+        twrr=twrr,
+        xirr=xirr,
         sharpe_ratio=calculate_sharpe(pv),
+        sortino_ratio=calculate_sortino(pv),
+        max_drawdown=calculate_max_drawdown(pv),
+        volatility=calculate_annualized_volatility(pv),
+        ulcer_index=calculate_ulcer_index(pv),
         final_portfolio_value=float(pv.iloc[-1]),
-        total_invested=total_invested,
-        absolute_return_eur=float(pv.iloc[-1]) - total_invested,
-        dip_buys_count=len(dip_trades),
-        total_dip_eur_deployed=total_dip_eur,
-        cash_utilization_rate=cash_util,
-        avg_dip_buy_price=avg_dip_price,
-        avg_sma200=avg_sma200,
-        ocf_depletion_days=ocf_depletion_days,
+        total_invested=float(final_state.total_contributions),
+        absolute_return_eur=float(pv.iloc[-1] - final_state.total_contributions),
+        cash_utilization_rate=round(max(0.0, min(cash_util, 1.0)), 4),
+        time_invested_ratio=calculate_time_invested_ratio(equity),
+        number_of_trades=len(trades),
+        avg_buy_price=float(avg_buy_price),
+        total_cashflows=float(final_state.total_cashflow),
     )

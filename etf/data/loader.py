@@ -6,10 +6,10 @@ from typing import Tuple
 import pandas as pd
 import yfinance as yf
 
-from ..config import SDAConfig
+from ..config import BacktestConfig
 
 
-def load_etf_data(cfg: SDAConfig, logger: logging.Logger) -> Tuple[pd.DataFrame, pd.Series]:
+def load_etf_data(cfg: BacktestConfig, logger: logging.Logger) -> Tuple[pd.DataFrame, pd.Series]:
     """Download ETF and VIX daily close prices."""
     logger.info("Downloading ETF data: %s  [%s → %s]", cfg.etf_ticker, cfg.start_date, cfg.end_date)
     raw_etf = yf.download(
