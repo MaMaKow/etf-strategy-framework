@@ -144,9 +144,8 @@ def main() -> None:
     bot_common.add_argument("--log-level", default="INFO")
 
     parser_bot_init = subparsers.add_parser("bot-init", parents=[bot_common], help="Initialize SDA bot database")
-    parser_bot_run = subparsers.add_parser("bot-run", parents=[bot_common], help="Run SDA bot for a specific ETF")
-    parser_bot_run.add_argument("--ticker", default="EUNL.DE", help="ETF ticker to evaluate")
-
+    parser_bot_run = subparsers.add_parser("bot-run", parents=[bot_common], help="Run SDA bot for ETF(s)")
+    parser_bot_run.add_argument("--ticker", default=None, help="Single ETF ticker, or None for all configured ETFs")
     args = parser.parse_args()
     logger = setup_logging(args.log_level)
     cfg = build_config(args) if hasattr(args, 'start') else None
@@ -174,7 +173,7 @@ def main() -> None:
     elif args.command == "bot-init":
         init_bot()
     elif args.command == "bot-run":
-        run_daily(args.ticker)
+        run_daily(args.ticker)  # None = alle ETFs
     else:
         parser.print_help()
 

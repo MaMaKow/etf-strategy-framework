@@ -26,7 +26,22 @@ def load_bot_config(config_path: str = "bot_config.yaml") -> Dict[str, Any]:
         return config
     else:
         print(f"⚠️ Konfigurationsdatei {config_path} nicht gefunden, verwende Standardkonfiguration")
-        return BOT_CONFIG.copy()
+        return {"global": BOT_CONFIG, "etfs": {"EUNL.DE": {"monthly_contribution": 300.0, "monthly_savings": 150.0}}}
+
+def get_etf_config(etf_ticker: str, full_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Merged globale Parameter mit ETF-spezifischen Parametern."""
+    global_params = full_config.get("global", {})
+    etf_params = full_config.get("etfs", {}).get(etf_ticker, {})
+    
+    # Merge: globale Parameter als Basis, ETF-spezifische überschreiben
+    merged_config = {**global_params, **etf_params}
+    merged_config["etf_ticker"] = etf_ticker
+    
+    return merged_config
+
+def get_all_etf_tickers(full_config: Dict[str, Any]) -> List[str]:
+    """Gibt alle konfigurierten ETF-Ticker zurück."""
+    return list(full_config.get("etfs", {}).keys())
 
 # ---------------------------------------------------------------------------
 # KONFIGURATION
@@ -556,17 +571,41 @@ def init_bot() -> None:
     init_database()
     print("✅ SDA-Bot initialisiert.")
 
-def run_daily(etf_ticker: str = "EUNL.DE") -> None:
-    """Führt die tägliche Bewertung für einen ETF durch."""
-    bot = SDABot()
-    try:
-        result = bot.evaluate_day(etf_ticker)
-        print(f"✅ Bewertung abgeschlossen: {result}")
-    except Exception as e:
-        error_msg = f"⚠️ Bot-Fehler für {etf_ticker}: {str(e)}"
-        print(error_msg)
-        bot.send_telegram(error_msg)
-        raise
+def run_daily(etf_ticker: str = None) -> None:
+    """Führt die tägliche Bewertung für einen oder alle ETFs durch.
+    
+    Args:
+        etf_ticker: Einzelner ETF-Ticker oder None für alle konfigurierten ETFs
+    """
+    config = load_bot_config()
+    
+    if etf_ticker:
+        # Einzelner ETF
+        etf_config = get_etf_config(etf_ticker, config)
+        bot = SDABot(etf_config)
+        try:
+            result = bot.evaluate_day(etf_ticker)
+            print(f"✅ Bewertung abgeschlossen: {result}")
+        except Exception as e:
+            error_msg = f"⚠️ Bot-Fehler für {etf_ticker}: {str(e)}"
+            print(error_msg)
+            bot.send_telegram(error_msg)
+            raise
+    else:
+        # Alle ETFs
+        etf_tickers = get_all_etf_tickers(config)
+        print(f"\n📊 Starte Bewertungen für {len(etf_tickers)} ETFs...")
+        
+        for ticker in etf_tickers:
+            try:
+                etf_config = get_etf_config(ticker, config)
+                bot = SDABot(etf_config)
+                result = bot.evaluate_day(ticker)
+                print(f"✅ {ticker}: {result}")
+            except Exception as e:
+                print(f"❌ {ticker}: Fehler - {str(e)}")
+        
+        print(f"\n✅ Alle Bewertungen abgeschlossen.")
 
 if __name__ == "__main__":
     # Beispiel-Nutzung
