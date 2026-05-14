@@ -116,7 +116,7 @@ def main() -> None:
     common.add_argument("--monthly", type=float, default=150.0,
                         help="Total monthly cash inflow into the strategy")
     common.add_argument("--monthly-savings", type=float, default=None,
-                        help="Amount of the total monthly cash that is used for the regular ETF savings order")
+                        help="Amount of total monthly cash used for the regular ETF savings order (must not exceed --monthly)")
     common.add_argument("--min-order", type=float, default=100.0)
     common.add_argument("--slippage", type=float, default=0.0005)
     common.add_argument("--log-level", default="INFO")

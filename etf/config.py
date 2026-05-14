@@ -85,4 +85,6 @@ class SDAConfig(BacktestConfig):
         super().__post_init__()
         if self.monthly_savings is None:
             self.monthly_savings = self.monthly_contribution
+        if self.monthly_savings > self.monthly_contribution:
+            raise ValueError("monthly_savings cannot exceed monthly_contribution")
         self.value_averaging_base = self.monthly_contribution
