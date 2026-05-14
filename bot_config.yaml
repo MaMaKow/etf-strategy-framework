@@ -1,0 +1,34 @@
+# SDA Bot Configuration
+# Diese Datei enthält alle Konfigurationsparameter für den SDA-Bot
+
+# ETF-Konfiguration
+etf_ticker: "EUNL.DE"
+vix_ticker: "^VIX"
+
+# Monatliche Cashflows (wie im Backtest)
+monthly_contribution: 300.0
+monthly_savings: 150.0
+
+# Strategie-Parameter (aus SDAConfig)
+ocf_target: 100.0
+min_order_eur: 100.0
+slippage: 0.0005
+vix_threshold: 15.0
+
+# Dip-Buy Tiers (Drawdown-Schwellen und OCF-Anteile)
+dip_tiers:
+  - [ -0.05, 0.20, "T1" ]
+  - [ -0.10, 0.30, "T2" ]
+  - [ -0.20, 0.40, "T3" ]
+  - [ -0.30, 0.50, "T4" ]
+  - [ -0.40, 0.60, "T5" ]
+
+# Cooldown und Filter
+cooldown_min: 5
+ocf_low_pct: 0.30
+ocf_mid_pct: 1.00
+t1_requires_above_sma200: true
+
+# Telegram-Konfiguration (optional, fallback auf .env)
+# telegram_bot_token: "your_bot_token"
+# telegram_chat_id: "your_chat_id"

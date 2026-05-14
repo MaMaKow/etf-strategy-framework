@@ -16,6 +16,7 @@ from ..strategies.dca import DollarCostAveragingStrategy
 from ..strategies.sda import SDAStrategy
 from ..strategies.value_averaging import ValueAveragingStrategy
 from ..strategies.bot import SignalBotStrategy
+from ..sda_bot import SDABot, init_bot, run_daily
 
 
 STRATEGY_REGISTRY = {
@@ -138,9 +139,17 @@ def main() -> None:
                               help="Single strategy to sweep")
     parser_sweep.add_argument("--strategies", help="Comma-separated strategies to sweep (default: all)")
 
+    # SDA Bot commands
+    bot_common = argparse.ArgumentParser(add_help=False)
+    bot_common.add_argument("--log-level", default="INFO")
+
+    parser_bot_init = subparsers.add_parser("bot-init", parents=[bot_common], help="Initialize SDA bot database")
+    parser_bot_run = subparsers.add_parser("bot-run", parents=[bot_common], help="Run SDA bot for a specific ETF")
+    parser_bot_run.add_argument("--ticker", default="EUNL.DE", help="ETF ticker to evaluate")
+
     args = parser.parse_args()
     logger = setup_logging(args.log_level)
-    cfg = build_config(args)
+    cfg = build_config(args) if hasattr(args, 'start') else None
 
     if args.command == "run":
         run_single_strategy(cfg, args.strategy, logger)
@@ -162,6 +171,10 @@ def main() -> None:
         output_path = f"{'_'.join(strategy_names)}_sweep_results.csv"
         sweep_df.to_csv(output_path, index=False)
         print(f"\n  [Sweep results saved → {output_path}]")
+    elif args.command == "bot-init":
+        init_bot()
+    elif args.command == "bot-run":
+        run_daily(args.ticker)
     else:
         parser.print_help()
 
