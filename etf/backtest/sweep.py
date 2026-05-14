@@ -42,10 +42,10 @@ def parameter_sweep(
             cfg_i = deepcopy(base_cfg)
             for key, value in zip(keys, combo):
                 if key == "monthly_contribution" and hasattr(cfg_i, "monthly_savings"):
-                    cfg_i.monthly_savings = value
+                    if cfg_i.monthly_savings == cfg_i.monthly_contribution:
+                        cfg_i.monthly_savings = value
                     cfg_i.monthly_contribution = value
                 elif key == "monthly_savings" and hasattr(cfg_i, "monthly_contribution"):
-                    cfg_i.monthly_contribution = value
                     cfg_i.monthly_savings = value
                 elif hasattr(cfg_i, key):
                     setattr(cfg_i, key, value)

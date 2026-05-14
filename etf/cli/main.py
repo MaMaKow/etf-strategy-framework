@@ -3,6 +3,7 @@ import csv
 import logging
 import sys
 from typing import Dict, List
+from datetime import date
 
 from ..analytics.metrics import compute_kpis
 from ..analytics.reports import plot_comparison_equity, plot_equity_curve, print_kpi_summary
@@ -45,12 +46,22 @@ def export_trades_csv(trades: List[Trade], path: str) -> None:
 
 
 def build_config(args: argparse.Namespace) -> BacktestConfig:
+    # Handle MAX dates
+    start_date = args.start
+    end_date = args.end
+
+    if start_date.upper() == "MAX":
+        start_date = "1900-01-01"  # Very early date to get all available data
+    if end_date.upper() == "MAX":
+        end_date = date.today().strftime("%Y-%m-%d")   # Today date to get all available data
+
     cfg = SDAConfig(
         etf_ticker=args.ticker,
         vix_ticker=args.vix_ticker,
-        start_date=args.start,
-        end_date=args.end,
-        monthly_savings=args.monthly,
+        start_date=start_date,
+        end_date=end_date,
+        monthly_contribution=args.monthly,
+        monthly_savings=args.monthly_savings,
         ocf_target=args.ocf_target,
         min_order_eur=args.min_order,
         slippage=args.slippage,
@@ -98,9 +109,12 @@ def main() -> None:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--ticker", default="EUNL.DE")
     common.add_argument("--vix-ticker", default="^VIX")
-    common.add_argument("--start", default="2014-01-01")
-    common.add_argument("--end", default="2024-12-31")
-    common.add_argument("--monthly", type=float, default=1000.0)
+    common.add_argument("--start", default="2014-01-01", help="Start date (YYYY-MM-DD) or 'MAX' for earliest available data")
+    common.add_argument("--end", default="2024-12-31", help="End date (YYYY-MM-DD) or 'MAX' for latest available data")
+    common.add_argument("--monthly", type=float, default=1000.0,
+                        help="Total monthly cash inflow into the strategy")
+    common.add_argument("--monthly-savings", type=float, default=None,
+                        help="Amount of the total monthly cash that is used for the regular ETF savings order")
     common.add_argument("--min-order", type=float, default=500.0)
     common.add_argument("--slippage", type=float, default=0.0005)
     common.add_argument("--log-level", default="INFO")

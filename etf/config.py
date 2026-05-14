@@ -13,9 +13,9 @@ class BacktestConfig:
     end_date: str = "2024-12-31"
 
     # ── Cash-flow / Execution ─────────────────────────────────────────────────
-    monthly_contribution: float = 1000.0     # EUR per month
+    monthly_contribution: float = 150.0     # EUR per month
     initial_cash: float = 0.0                # starting cash balance
-    min_order_eur: float = 250.0             # war vorher 500.0
+    min_order_eur: float = 150.0             # war vorher 500.0
     slippage: float = 0.0005                # 0.05 %
 
     # ── Value Averaging ──────────────────────────────────────────────────────
@@ -42,8 +42,8 @@ class BacktestConfig:
 
 @dataclass
 class SDAConfig(BacktestConfig):
-    monthly_savings: Optional[float] = None         # legacy alias for monthly contribution
-    ocf_target: float = 5000.0
+    monthly_savings: Optional[float] = None         # amount invested in the monthly ETF order; if None, defaults to monthly_contribution
+    ocf_target: float = 500.0
     ocf_low_pct: float = 0.30               # below → 100 % to OCF
     ocf_mid_pct: float = 1.00               # below → 70 % ETF / 30 % OCF
 
@@ -67,6 +67,4 @@ class SDAConfig(BacktestConfig):
         super().__post_init__()
         if self.monthly_savings is None:
             self.monthly_savings = self.monthly_contribution
-        else:
-            self.monthly_contribution = self.monthly_savings
         self.value_averaging_base = self.monthly_contribution

@@ -52,6 +52,8 @@ class SDAStrategy(Strategy):
     def _evaluate_dip_buys(self, market_state: MarketState, state: State) -> List[Order]:
         if market_state.vix <= self.cfg.vix_threshold or math.isnan(market_state.vix):
             return []
+        if math.isnan(market_state.drawdown):
+            return []
 
         for threshold, ocf_frac, label in reversed(self.cfg.dip_tiers):
             if market_state.drawdown > threshold:

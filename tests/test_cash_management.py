@@ -170,6 +170,38 @@ class TestCashManagement:
         assert orders[0].tier == "MONTHLY-ETF"
         assert orders[0].amount_eur == config.monthly_contribution
 
+    def test_separate_monthly_contribution_and_monthly_savings(self):
+        """Test that total monthly cash and monthly savings can differ in SDA."""
+        config = SDAConfig(
+            monthly_contribution=300.0,
+            monthly_savings=150.0,
+            ocf_target=5000.0,
+            vix_threshold=15.0
+        )
+
+        strategy = SDAStrategy(config)
+        portfolio = Portfolio(State(cash_ocf=6000.0))
+
+        market_state = MarketState(
+            date=datetime(2024, 1, 1),
+            close=100.0,
+            vix=10.0,
+            drawdown=0.0,
+            sma200=95.0,
+            is_month_start=True,
+        )
+
+        # on month start, 300 € cash is available, but only 150 € is used for the regular savings order
+        orders = strategy.on_day(market_state, portfolio.state)
+        assert len(orders) == 1
+        assert orders[0].tier == "MONTHLY-ETF"
+        assert orders[0].amount_eur == config.monthly_savings
+        assert portfolio.state.cash_ocf == 6000.0
+
+        # simulate the order execution and verify remaining cash would be available for dips
+        portfolio.execute_order(orders[0])
+        assert portfolio.state.cash_ocf == 6000.0 - orders[0].amount_eur
+
     def test_month_start_dip_buy_respects_monthly_order(self):
         """Test that dip buying does not exceed cash after a month-start savings order."""
         config = SDAConfig(

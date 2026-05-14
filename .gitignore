@@ -1,13 +1,9 @@
 .env
 venv
 
-sda_equity_curve.png
-sda_sweep_results.csv
-sda_trades.csv
 etf_sda_backtest_original.py
-dca_sweep_results.csv
-value_averaging_sweep_results.csv
-comparison_equity_eunl_de.png
+*.csv
+*.png
 
 .vscode/settings.json
 
