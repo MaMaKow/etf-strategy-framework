@@ -46,6 +46,11 @@ class BacktestEngine:
                 close=price,
                 drawdown=float(row["drawdown"]),
                 sma200=float(row["sma200"]),
+                sma20=float(row["sma20"]),
+                rsi=float(row["rsi"]),
+                prev_price=float(row["prev_price"]),
+                prev_sma200=float(row["prev_sma200"]),
+                recovery_days=int(row["recovery_days"]),
                 vix=float(row["vix"]),
                 is_month_start=bool(row["is_month_start"]),
             )

@@ -12,6 +12,7 @@ from ..backtest.engine import BacktestEngine
 from ..config import BacktestConfig
 from ..models import SweepResult
 from ..strategies.base import Strategy
+from ..strategies.bot import SignalBotStrategy
 from ..strategies.sda import SDAStrategy
 
 
@@ -24,13 +25,20 @@ def parameter_sweep(
     strategy_factories: Optional[Dict[str, StrategyFactory]] = None,
     param_grid: Optional[Dict[str, List[float]]] = None,
 ) -> pd.DataFrame:
-    strategy_factories = strategy_factories or {"sda": SDAStrategy}
+    strategy_factories = strategy_factories or {
+        "sda": SDAStrategy,
+        "bot": SignalBotStrategy,
+    }
     param_grid = param_grid or {
-    "ocf_target": [150, 300, 500,750,1000,1500,2000],
-    "monthly_contribution": [150,200,250,300,400,500],
-        "min_order_eur": [100, 250, 500, 1000],
-    "vix_threshold": [10.0],
-}
+        "ocf_target": [100, 150],
+        "monthly_contribution": [150.0],
+        "monthly_savings": [150.0],
+        "min_order_eur": [100.0],
+        "vix_threshold": [15.0],
+        "l1_drawdown": [-0.05, -0.15],
+        "l2_rsi": [22.0, 35.0],
+        "l4_dip_pct": [-0.02, -0.04],
+    }
 
     keys = list(param_grid.keys())
     combos = list(iterproduct(*(param_grid[key] for key in keys)))

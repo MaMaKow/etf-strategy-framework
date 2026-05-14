@@ -15,12 +15,14 @@ from ..models import Trade
 from ..strategies.dca import DollarCostAveragingStrategy
 from ..strategies.sda import SDAStrategy
 from ..strategies.value_averaging import ValueAveragingStrategy
+from ..strategies.bot import SignalBotStrategy
 
 
 STRATEGY_REGISTRY = {
     "sda": SDAStrategy,
     "dca": DollarCostAveragingStrategy,
     "value_averaging": ValueAveragingStrategy,
+    "bot": SignalBotStrategy,
 }
 
 
@@ -111,15 +113,15 @@ def main() -> None:
     common.add_argument("--vix-ticker", default="^VIX")
     common.add_argument("--start", default="2014-01-01", help="Start date (YYYY-MM-DD) or 'MAX' for earliest available data")
     common.add_argument("--end", default="2024-12-31", help="End date (YYYY-MM-DD) or 'MAX' for latest available data")
-    common.add_argument("--monthly", type=float, default=1000.0,
+    common.add_argument("--monthly", type=float, default=150.0,
                         help="Total monthly cash inflow into the strategy")
     common.add_argument("--monthly-savings", type=float, default=None,
                         help="Amount of the total monthly cash that is used for the regular ETF savings order")
-    common.add_argument("--min-order", type=float, default=500.0)
+    common.add_argument("--min-order", type=float, default=100.0)
     common.add_argument("--slippage", type=float, default=0.0005)
     common.add_argument("--log-level", default="INFO")
     common.add_argument("--export-trades-csv", default="")
-    common.add_argument("--ocf-target", type=float, default=5000.0)
+    common.add_argument("--ocf-target", type=float, default=100.0)
     common.add_argument("--va-mode", choices=["linear", "exponential"], default="linear")
     common.add_argument("--va-base", type=float, default=1000.0)
     common.add_argument("--va-rate", type=float, default=0.0)
@@ -132,7 +134,9 @@ def main() -> None:
     parser_compare.add_argument("--strategies", required=True, help="Comma-separated strategy keys")
 
     parser_sweep = subparsers.add_parser("sweep", parents=[common], help="Sweep strategy parameters")
-    parser_sweep.add_argument("--strategy", choices=list(STRATEGY_REGISTRY), required=True)
+    parser_sweep.add_argument("--strategy", choices=list(STRATEGY_REGISTRY), required=False,
+                              help="Single strategy to sweep")
+    parser_sweep.add_argument("--strategies", help="Comma-separated strategies to sweep (default: all)")
 
     args = parser.parse_args()
     logger = setup_logging(args.log_level)
@@ -144,9 +148,18 @@ def main() -> None:
         names = [name.strip() for name in args.strategies.split(",") if name.strip()]
         run_comparison(cfg, names, logger)
     elif args.command == "sweep":
-        strategy = make_strategy(args.strategy, cfg)
-        sweep_df = parameter_sweep(cfg, logger, strategy_factories={args.strategy: lambda cfg_: strategy.__class__(cfg_)})
-        output_path = f"{args.strategy}_sweep_results.csv"
+        if args.strategies:
+            strategy_names = [name.strip() for name in args.strategies.split(",") if name.strip()]
+        elif args.strategy:
+            strategy_names = [args.strategy]
+        else:
+            strategy_names = list(STRATEGY_REGISTRY.keys())
+
+        strategy_factories = {
+            name: STRATEGY_REGISTRY[name] for name in strategy_names
+        }
+        sweep_df = parameter_sweep(cfg, logger, strategy_factories=strategy_factories)
+        output_path = f"{'_'.join(strategy_names)}_sweep_results.csv"
         sweep_df.to_csv(output_path, index=False)
         print(f"\n  [Sweep results saved → {output_path}]")
     else:

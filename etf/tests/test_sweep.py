@@ -6,7 +6,11 @@ from datetime import datetime
 from etf.backtest.sweep import parameter_sweep
 from etf.strategies.dca import DollarCostAveragingStrategy
 from etf.strategies.sda import SDAStrategy
+from etf.strategies.bot import SignalBotStrategy
 from etf.config import SDAConfig
+from etf.models import MarketState
+from etf.portfolio.portfolio import Portfolio
+from etf.portfolio.portfolio import State
 
 
 class TestParameterSweep:
@@ -72,6 +76,65 @@ class TestParameterSweep:
         assert all(results['strategy'] == 'SDA')
         assert all(results['vix_threshold'].isin([20.0, 25.0]))
 
+    def test_signal_bot_sweep_basic(self, base_config, logger):
+        """Test basic SignalBot parameter sweep."""
+        def bot_factory(config):
+            return SignalBotStrategy(config)
+
+        param_grid = {
+            'vix_threshold': [20.0, 25.0],
+            'l2_rsi': [20.0, 25.0],
+        }
+
+        results = parameter_sweep(
+            base_cfg=base_config,
+            logger=logger,
+            strategy_factories={'BOT': bot_factory},
+            param_grid=param_grid
+        )
+
+        assert isinstance(results, pd.DataFrame)
+        assert len(results) == 4  # Two vix thresholds * two RSI thresholds
+        assert all(results['strategy'] == 'BOT')
+        assert set(results['l2_rsi'].unique()) == {20.0, 25.0}
+
+    def test_signal_bot_generates_monthly_and_signal_orders(self, base_config, logger):
+        def bot_factory(config):
+            return SignalBotStrategy(config)
+
+        config = SDAConfig(
+            monthly_contribution=300.0,
+            monthly_savings=150.0,
+            min_order_eur=100.0,
+            vix_threshold=20.0,
+            l1_drawdown=-0.05,
+            l1_rsi=30.0,
+            l2_rsi=30.0,
+            l3_rsi_max=50.0,
+            l4_rsi=40.0,
+        )
+        strategy = bot_factory(config)
+        market_state = MarketState(
+            date=datetime(2024, 1, 1),
+            close=100.0,
+            drawdown=-0.10,
+            sma200=95.0,
+            sma20=98.0,
+            prev_price=95.0,
+            prev_sma200=96.0,
+            recovery_days=2,
+            rsi=25.0,
+            vix=25.0,
+            is_month_start=True,
+        )
+        portfolio = Portfolio(State(cash_ocf=300.0))
+
+        orders = strategy.on_day(market_state, portfolio.state)
+        assert len(orders) == 2
+        assert orders[0].tier == 'MONTHLY-ETF'
+        assert orders[0].amount_eur == 150.0
+        assert orders[1].tier in {'L1_ULTIMATE_DIP', 'L2_RSI_EXTREME'}
+
     def test_multiple_strategies_sweep(self, base_config, logger):
         """Test sweep with multiple strategies simultaneously."""
         def dca_factory(config):
@@ -110,8 +173,18 @@ class TestParameterSweep:
         )
 
         assert isinstance(results, pd.DataFrame)
-        assert len(results) == 168  # 7*6*4*1 default parameter combinations
+        assert len(results) == 128  # 2*2*1*2*2*2*2*2 default parameter combinations
         assert all(results['strategy'] == 'DCA')
+
+    def test_default_strategy_factories_include_sda_and_bot(self, base_config, logger):
+        results = parameter_sweep(
+            base_cfg=base_config,
+            logger=logger,
+            param_grid={'vix_threshold': [15.0]}
+        )
+
+        assert isinstance(results, pd.DataFrame)
+        assert set(results['strategy'].unique()) == {'sda', 'bot'}
 
     def test_result_columns(self, base_config, logger):
         """Test that sweep results contain expected columns."""

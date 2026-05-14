@@ -47,6 +47,11 @@ class MarketState:
     sma200: float
     vix: float
     is_month_start: bool
+    sma20: float = 0.0
+    rsi: float = 0.0
+    prev_price: float = 0.0
+    prev_sma200: float = 0.0
+    recovery_days: int = 0
 
 
 @dataclass

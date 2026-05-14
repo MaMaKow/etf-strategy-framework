@@ -15,7 +15,7 @@ class BacktestConfig:
     # ── Cash-flow / Execution ─────────────────────────────────────────────────
     monthly_contribution: float = 150.0     # EUR per month
     initial_cash: float = 0.0                # starting cash balance
-    min_order_eur: float = 150.0             # war vorher 500.0
+    min_order_eur: float = 100.0             # default optimized order size
     slippage: float = 0.0005                # 0.05 %
 
     # ── Value Averaging ──────────────────────────────────────────────────────
@@ -27,6 +27,24 @@ class BacktestConfig:
     # ── Indicators ───────────────────────────────────────────────────────────
     rolling_high_window: int = 252
     sma_window: int = 200
+    rsi_window: int = 14
+
+    # ── Bot signal parameters ──────────────────────────────────────────────────
+    recovery_days: int = 2
+    min_days_l1l2: int = 30
+    min_days_l3: int = 60
+    min_days_l4: int = 30
+    l1_drawdown: float = -0.10
+    l1_rsi: float = 30.0
+    l1_amount: float = 100.0
+    l2_rsi: float = 22.0
+    l2_amount: float = 50.0
+    l3_rsi_max: float = 40.0
+    l3_amount: float = 50.0
+    l4_dip_pct: float = -0.04
+    l4_rsi: float = 32.0
+    l4_amount: float = 25.0
+    drawdown_scale_factor: float = 2.0
 
     # ── Misc ─────────────────────────────────────────────────────────────────
     seed: int = 42
@@ -43,7 +61,7 @@ class BacktestConfig:
 @dataclass
 class SDAConfig(BacktestConfig):
     monthly_savings: Optional[float] = None         # amount invested in the monthly ETF order; if None, defaults to monthly_contribution
-    ocf_target: float = 500.0
+    ocf_target: float = 100.0
     ocf_low_pct: float = 0.30               # below → 100 % to OCF
     ocf_mid_pct: float = 1.00               # below → 70 % ETF / 30 % OCF
 
