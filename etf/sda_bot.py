@@ -26,8 +26,8 @@ def load_bot_config(config_path: str = "bot_config.yaml") -> Dict[str, Any]:
         return config
     else:
         print(f"⚠️ Konfigurationsdatei {config_path} nicht gefunden, verwende Standardkonfiguration")
-        return {"global": BOT_CONFIG, "etfs": {"EUNL.DE": {"monthly_contribution": 300.0, "monthly_savings": 150.0}}}
-
+        return BOT_CONFIG
+    
 def get_etf_config(etf_ticker: str, full_config: Dict[str, Any]) -> Dict[str, Any]:
     """Merged globale Parameter mit ETF-spezifischen Parametern."""
     global_params = full_config.get("global", {})
@@ -59,25 +59,37 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # Bot-Konfiguration (kann später in YAML/JSON ausgelagert werden)
 BOT_CONFIG = {
-    "etf_ticker": "EUNL.DE",
-    "vix_ticker": "^VIX",
-    "monthly_contribution": 300.0,
-    "monthly_savings": 150.0,
-    "ocf_target": 100.0,
-    "min_order_eur": 100.0,
-    "slippage": 0.0005,
-    "vix_threshold": 15.0,
-    "dip_tiers": [
-        (-0.05, 0.20, "T1"),
-        (-0.10, 0.30, "T2"),
-        (-0.20, 0.40, "T3"),
-        (-0.30, 0.50, "T4"),
-        (-0.40, 0.60, "T5")
-    ],
-    "cooldown_min": 5,
-    "ocf_low_pct": 0.30,
-    "ocf_mid_pct": 1.00,
-    "t1_requires_above_sma200": True,
+    "global": {
+        "vix_ticker": "^VIX",
+        "slippage": 0.0005,
+        "vix_threshold": 15.0,
+        "min_order_eur": 100.0,
+        "ocf_target": 100.0,
+        "cooldown_min": 5,
+        "ocf_low_pct": 0.30,
+        "ocf_mid_pct": 1.00,
+        "t1_requires_above_sma200": True,
+
+        "dip_tiers": [
+            (-0.05, 0.20, "T1"),
+            (-0.10, 0.30, "T2"),
+            (-0.20, 0.40, "T3"),
+            (-0.30, 0.50, "T4"),
+            (-0.40, 0.60, "T5"),
+        ],
+    },
+
+    "etfs": {
+        "SNAW.DE": {
+            "monthly_contribution": 300.0,
+            "monthly_savings": 150.0,
+        },
+
+        "IUSN.DE": {
+            "monthly_contribution": 30.0,
+            "monthly_savings": 15.0,
+        },
+    },
 }
 
 # ---------------------------------------------------------------------------
