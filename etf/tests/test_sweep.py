@@ -203,7 +203,7 @@ class TestParameterSweep:
         expected_columns = [
             'strategy', 'monthly_contribution', 'cagr', 'twrr', 'xirr',
             'sharpe', 'sortino', 'max_dd', 'final_pv', 'total_invested',
-            'cash_util', 'trades'
+            'cash_util', 'trades', 'total_trade_costs_eur'
         ]
 
         for col in expected_columns:
@@ -224,7 +224,7 @@ class TestParameterSweep:
         expected_columns = [
             'strategy', 'monthly_contribution', 'cagr', 'twrr', 'xirr',
             'sharpe', 'sortino', 'max_dd', 'final_pv', 'total_invested',
-            'cash_util', 'trades'
+            'cash_util', 'trades', 'total_trade_costs_eur'
         ]
 
         for col in expected_columns:
