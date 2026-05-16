@@ -17,6 +17,9 @@ class BacktestConfig:
     initial_cash: float = 0.0                # starting cash balance
     min_order_eur: float = 100.0             # default optimized order size
     slippage: float = 0.0005                # 0.05 %
+    broker_base_fee_eur: float = 4.90       # fixed fee per non-savings-plan buy
+    broker_variable_fee_rate: float = 0.0025  # 0.25 % of order amount
+    broker_fee_cap_eur: float = 69.90       # max total fee per order
 
     # ── Value Averaging ──────────────────────────────────────────────────────
     value_averaging_mode: str = "linear"   # linear or exponential

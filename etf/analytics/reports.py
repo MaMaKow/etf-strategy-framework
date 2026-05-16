@@ -28,6 +28,7 @@ def print_kpi_summary(kpis: KPIReport, cfg: BacktestConfig) -> None:
     print(f"  {'Time Invested Ratio':<30} {kpis.time_invested_ratio:>10.2%}")
     print(f"  {'Number of Trades':<30} {kpis.number_of_trades:>10d}")
     print(f"  {'Avg Buy Price':<30} {kpis.avg_buy_price:>10.4f}")
+    print(f"  {'Total Trade Costs':<30} {kpis.total_trade_costs_eur:>10,.2f} EUR")
     print(sep)
 
 

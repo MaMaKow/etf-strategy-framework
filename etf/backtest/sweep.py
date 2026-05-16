@@ -83,6 +83,7 @@ def parameter_sweep(
                 total_invested=kpis.total_invested,
                 cash_util=kpis.cash_utilization_rate,
                 trades=kpis.number_of_trades,
+                total_trade_costs_eur=kpis.total_trade_costs_eur,
             ))
 
             logger.info("Sweep [%s] %d/%d  %s → Sharpe %.3f", strategy_name, i + 1, len(combos), cfg_i, kpis.sharpe_ratio)
@@ -100,5 +101,6 @@ def parameter_sweep(
         "total_invested": r.total_invested,
         "cash_util": r.cash_util,
         "trades": r.trades,
+        "total_trade_costs_eur": r.total_trade_costs_eur,
     } for r in results])
     return result_df.sort_values(["strategy", "sharpe"], ascending=[True, False]).reset_index(drop=True)

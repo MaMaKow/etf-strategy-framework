@@ -148,6 +148,19 @@ def calculate_xirr(cashflows: pd.Series, final_value: Optional[float] = None) ->
     return float(rate)
 
 
+def calculate_total_trade_costs(trades: List[Trade], cfg: BacktestConfig) -> float:
+    total_costs = 0.0
+    for trade in trades:
+        if trade.amount_eur <= 0:
+            continue
+        if trade.tier.startswith("MONTHLY-"):
+            continue
+        fee = cfg.broker_base_fee_eur + (cfg.broker_variable_fee_rate * trade.amount_eur)
+        fee = min(fee, cfg.broker_fee_cap_eur)
+        total_costs += fee
+    return float(total_costs)
+
+
 def compute_kpis(equity: pd.DataFrame, trades: List[Trade], final_state: State, cfg: BacktestConfig, strategy_name: str = "strategy") -> KPIReport:
     pv = equity["portfolio_value"]
     cashflows = equity["cashflow"] if "cashflow" in equity.columns else pd.Series(0.0, index=equity.index)
@@ -165,6 +178,8 @@ def compute_kpis(equity: pd.DataFrame, trades: List[Trade], final_state: State, 
     cash_util = 0.0
     if pv.mean() > 0:
         cash_util = 1.0 - float(equity["cash_ocf"].mean() / pv.mean())
+
+    total_trade_costs_eur = calculate_total_trade_costs(trades, cfg)
 
     return KPIReport(
         strategy_name=strategy_name,
@@ -184,4 +199,5 @@ def compute_kpis(equity: pd.DataFrame, trades: List[Trade], final_state: State, 
         number_of_trades=len(trades),
         avg_buy_price=float(avg_buy_price),
         total_cashflows=float(final_state.total_cashflow),
+        total_trade_costs_eur=total_trade_costs_eur,
     )

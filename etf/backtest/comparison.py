@@ -56,5 +56,6 @@ class BacktestComparison:
                 "time_invested_ratio": item.kpis.time_invested_ratio,
                 "trades": item.kpis.number_of_trades,
                 "avg_buy_price": item.kpis.avg_buy_price,
+                "total_trade_costs_eur": item.kpis.total_trade_costs_eur,
             })
         return pd.DataFrame(rows).set_index("strategy").sort_values("cagr", ascending=False)
