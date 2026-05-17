@@ -14,6 +14,7 @@ from ..config import BacktestConfig, SDAConfig
 from ..models import Trade
 from ..strategies.dca import DollarCostAveragingStrategy
 from ..strategies.sda import SDAStrategy
+from ..strategies.adaptive_dca import AdaptiveDCAStrategy
 from ..strategies.value_averaging import ValueAveragingStrategy
 from ..strategies.bot import SignalBotStrategy
 from ..sda_bot import SDABot, init_bot, run_daily
@@ -24,6 +25,7 @@ STRATEGY_REGISTRY = {
     "dca": DollarCostAveragingStrategy,
     "value_averaging": ValueAveragingStrategy,
     "bot": SignalBotStrategy,
+    "adaptive_dca": AdaptiveDCAStrategy,
 }
 
 
@@ -74,8 +76,17 @@ def build_config(args: argparse.Namespace) -> BacktestConfig:
         value_averaging_base=args.va_base,
         value_averaging_growth_rate=args.va_rate,
         value_averaging_allow_negative=args.va_allow_negative,
+        adca_reserve_pct=args.adca_reserve_pct,
+        adca_cooldown_days=args.adca_cooldown_days,
     )
+    cfg.adca_dip_tiers = [
+        (args.adca_t1_drawdown, args.adca_t1_amount, "ADCA_T1"),
+        (args.adca_t2_drawdown, args.adca_t2_amount, "ADCA_T2"),
+        (args.adca_t3_drawdown, args.adca_t3_amount, "ADCA_T3"),
+        (args.adca_t4_drawdown, args.adca_t4_amount, "ADCA_T4"),
+    ]
     return cfg
+
 
 
 def make_strategy(name: str, cfg: BacktestConfig):
@@ -127,6 +138,18 @@ def main() -> None:
     common.add_argument("--va-base", type=float, default=1000.0)
     common.add_argument("--va-rate", type=float, default=0.0)
     common.add_argument("--va-allow-negative", action="store_true")
+    common.add_argument("--adca-reserve-pct", type=float, default=0.10,
+                        help="Adaptive DCA: tactical reserve fraction of monthly contribution (0.0-0.5)")
+    common.add_argument("--adca-cooldown-days", type=int, default=2,
+                        help="Adaptive DCA: cooldown in days per dip tier (0 disables cooldown)")
+    common.add_argument("--adca-t1-drawdown", type=float, default=-0.05)
+    common.add_argument("--adca-t1-amount", type=float, default=100.0)
+    common.add_argument("--adca-t2-drawdown", type=float, default=-0.10)
+    common.add_argument("--adca-t2-amount", type=float, default=150.0)
+    common.add_argument("--adca-t3-drawdown", type=float, default=-0.15)
+    common.add_argument("--adca-t3-amount", type=float, default=250.0)
+    common.add_argument("--adca-t4-drawdown", type=float, default=-0.20)
+    common.add_argument("--adca-t4-amount", type=float, default=350.0)
 
     parser_run = subparsers.add_parser("run", parents=[common], help="Run one strategy")
     parser_run.add_argument("--strategy", choices=list(STRATEGY_REGISTRY), required=True)
