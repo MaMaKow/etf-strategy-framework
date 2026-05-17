@@ -27,6 +27,7 @@ class Trade:
     drawdown: Optional[float] = None
     vix: Optional[float] = None
     cash_left: float = 0.0
+    fee_eur: float = 0.0
 
 
 @dataclass
@@ -83,6 +84,7 @@ class KPIReport:
     number_of_trades: int
     avg_buy_price: float
     total_cashflows: float
+    total_trade_costs_eur: float
 
 
 @dataclass
@@ -99,6 +101,7 @@ class SweepResult:
     total_invested: float
     cash_util: float
     trades: int
+    total_trade_costs_eur: float
 
 
 @dataclass

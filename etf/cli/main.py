@@ -40,7 +40,7 @@ def setup_logging(level: str) -> logging.Logger:
 def export_trades_csv(trades: List[Trade], path: str) -> None:
     if not trades:
         return
-    keys = ["date", "tier", "amount_eur", "price", "units", "drawdown", "vix", "cash_left"]
+    keys = ["date", "tier", "amount_eur", "price", "units", "drawdown", "vix", "cash_left", "fee_eur"]
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=keys)
         writer.writeheader()
