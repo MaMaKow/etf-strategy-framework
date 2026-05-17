@@ -149,7 +149,16 @@ def calculate_xirr(cashflows: pd.Series, final_value: Optional[float] = None) ->
 
 
 def calculate_total_trade_costs(trades: List[Trade], cfg: BacktestConfig) -> float:
-    return float(sum(max(0.0, getattr(trade, "fee_eur", 0.0)) for trade in trades))
+    total_costs = 0.0
+    for trade in trades:
+        if trade.amount_eur <= 0:
+            continue
+        if trade.tier.startswith("MONTHLY-"):
+            continue
+        fee = cfg.broker_base_fee_eur + (cfg.broker_variable_fee_rate * trade.amount_eur)
+        fee = min(fee, cfg.broker_fee_cap_eur)
+        total_costs += fee
+    return float(total_costs)
 
 
 def compute_kpis(equity: pd.DataFrame, trades: List[Trade], final_state: State, cfg: BacktestConfig, strategy_name: str = "strategy") -> KPIReport:
