@@ -49,6 +49,16 @@ class BacktestConfig:
     l4_amount: float = 25.0
     drawdown_scale_factor: float = 2.0
 
+    # ── Adaptive DCA (high-investment dip reinforcement) ─────────────────────
+    adca_reserve_pct: float = 0.10
+    adca_cooldown_days: int = 2
+    adca_dip_tiers: List[Tuple[float, float, str]] = field(default_factory=lambda: [
+        (-0.05, 100.0, "ADCA_T1"),
+        (-0.10, 150.0, "ADCA_T2"),
+        (-0.15, 250.0, "ADCA_T3"),
+        (-0.20, 350.0, "ADCA_T4"),
+    ])
+
     # ── Misc ─────────────────────────────────────────────────────────────────
     seed: int = 42
     log_level: str = "INFO"
@@ -59,6 +69,8 @@ class BacktestConfig:
             self.value_averaging_base = self.monthly_contribution
         if self.value_averaging_base <= 0:
             self.value_averaging_base = self.monthly_contribution
+        if not (0.0 <= self.adca_reserve_pct <= 0.5):
+            raise ValueError("adca_reserve_pct must be between 0.0 and 0.5")
 
 
 @dataclass
