@@ -18,7 +18,7 @@ class BacktestEngine:
         self.cfg = cfg
         self.strategy = strategy
         self.logger = logger
-        self.portfolio = Portfolio(State(cash_ocf=cfg.initial_cash))
+        self.portfolio = Portfolio(cfg, State(cash_ocf=cfg.initial_cash))
         self.cash_manager = CashFlowManager(cfg)
 
     def run(self, df: Optional[pd.DataFrame] = None) -> Tuple[pd.DataFrame, List[Trade]]:

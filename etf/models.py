@@ -27,6 +27,7 @@ class Trade:
     drawdown: Optional[float] = None
     vix: Optional[float] = None
     cash_left: float = 0.0
+    fee_eur: float = 0.0
 
 
 @dataclass
