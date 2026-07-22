@@ -467,25 +467,26 @@ class SDABot:
             self.log_and_notify(etf_ticker, current_date, "HOLD", reason=reason, market_data={})
             return reason
 
+        # WICHTIG: Monatliche Einzahlung MUSS verbucht werden, BEVOR die Strategie
+        # befragt wird – SDAStrategy.on_day() trifft ihre Entscheidung anhand von
+        # state.cash_ocf. Vorher lief das umgekehrt, wodurch cash_ocf nie über 0
+        # hinauskam (Henne-Ei-Deadlock: keine Order → keine Gutschrift → keine Order …).
+        if market_state.is_month_start:
+            bot_state.cash_ocf += self.config["monthly_contribution"]
+            bot_state.total_contributions += self.config["monthly_contribution"]
+            bot_state.total_cashflow += self.config["monthly_contribution"]
+            bot_state.last_monthly_date = current_date
+
         # SDA-Logik ausführen
         portfolio_state = bot_state.to_state()
         orders = self.strategy.on_day(market_state, portfolio_state)
 
+        tier = None
+        amount_eur = None
+        units = None
+
         # State aktualisieren
         if orders:
-            # Monatliche Orders verarbeiten
-            monthly_orders = [o for o in orders if o.tier == "MONTHLY-ETF"]
-            dip_orders = [o for o in orders if o.tier != "MONTHLY-ETF"]
-
-            # Cashflow für monatliche Orders
-            if monthly_orders and market_state.is_month_start:
-                monthly_amount = sum(o.amount_eur for o in monthly_orders)
-                bot_state.cash_ocf += self.config["monthly_contribution"]
-                bot_state.total_contributions += self.config["monthly_contribution"]
-                bot_state.total_cashflow += self.config["monthly_contribution"]
-                bot_state.last_monthly_date = current_date
-
-            # Portfolio aktualisieren
             for order in orders:
                 if order.amount_eur <= bot_state.cash_ocf:
                     bot_state.cash_ocf -= order.amount_eur
@@ -500,23 +501,31 @@ class SDABot:
             bot_state.portfolio_value = bot_state.units * market_state.close
 
         # Cooldowns dekrementieren
-        bot_state.cooldowns = {k: v-1 for k, v in bot_state.cooldowns.items() if v > 1}
+        bot_state.cooldowns = {k: v - 1 for k, v in bot_state.cooldowns.items() if v > 1}
 
         # State speichern
         save_bot_state(bot_state)
 
         # Empfehlung erstellen
-        if orders and any(o.tier != "MONTHLY-ETF" for o in orders):
-            dip_order = next((o for o in orders if o.tier != "MONTHLY-ETF"), None)
-            if dip_order:
-                recommendation = "BUY"
-                tier = dip_order.tier
-                amount_eur = dip_order.amount_eur
-                units = dip_order.units
-                reason = f"Dip-Buy empfohlen: {tier}, Betrag {amount_eur:.2f} €, Preis {dip_order.price:.4f} €, Einheiten {units:.4f}"
-            else:
-                recommendation = "HOLD"
-                reason = "Monatlicher Sparplan ausgeführt, aber kein Dip-Buy."
+        dip_order = next((o for o in orders if o.tier != "MONTHLY-ETF"), None) if orders else None
+
+        if dip_order:
+            recommendation = "BUY"
+            tier = dip_order.tier
+            amount_eur = dip_order.amount_eur
+            units = dip_order.units
+            reason = (
+                f"Dip-Buy empfohlen: {tier}, Betrag {amount_eur:.2f} €, "
+                f"Preis {dip_order.price:.4f} €, Einheiten {units:.4f}"
+            )
+        elif orders:
+            # Nur Monatsorder ausgeführt, kein Dip-Buy
+            recommendation = "HOLD"
+            monthly_order = orders[0]
+            reason = (
+                f"Monatlicher Sparplan ausgeführt: {monthly_order.amount_eur:.2f} € "
+                f"({monthly_order.units:.4f} Einheiten), kein Dip-Buy."
+            )
         else:
             recommendation = "HOLD"
             reason_parts = []
@@ -573,10 +582,6 @@ class SDABot:
         self.send_telegram(message)
 
         return reason
-
-# ---------------------------------------------------------------------------
-# HAUPTFUNKTIONEN
-# ---------------------------------------------------------------------------
 
 def init_bot() -> None:
     """Initialisiert die Datenbank und den Bot."""
