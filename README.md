@@ -30,6 +30,16 @@ python -m etf.cli.main
 python -m etf.cli.main --sweep
 ```
 
+### Strategie-Auswahl per CLI
+
+```bash
+python -m etf.cli.main run --strategy sda --ticker EUNL.DE --start 2014-01-01 --end 2024-12-31
+python -m etf.cli.main run --strategy adaptive_dca --ticker EUNL.DE --monthly 300 --adca-reserve-pct 0.1
+python -m etf.cli.main compare --strategies sda,adaptive_dca,dca --ticker EUNL.DE --start 2014-01-01 --end 2024-12-31
+```
+
+Weitere Details: `docs/adaptive_dca_strategy.md`.
+
 ## Server Deployment
 
 ### 1) System vorbereiten
