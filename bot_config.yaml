@@ -33,22 +33,18 @@ global:
 # ETF-SPEZIFISCHE PARAMETER
 # ---------------------------------------------------------------------------
 etfs:
-  EUNL.DE:
+  SNAW.DE: # iShares MSCI World Screened UCITS ETF USD (Acc) IE00BFNM3J75 Ziel: 65 %
     monthly_contribution: 300.0
     monthly_savings: 150.0
   
-  SNAW.DE:
-    monthly_contribution: 200.0
-    monthly_savings: 100.0
+  IUSN.DE: # iShares MSCI World Small Cap UCITS ETF IE00BF4RFH31 bis 15%
+    monthly_contribution: 30.0
+    monthly_savings: 15.0
   
-  IUSN.DE:
-    monthly_contribution: 200.0
-    monthly_savings: 100.0
-  
-  EUNW.DE:
-    monthly_contribution: 150.0
-    monthly_savings: 75.0
-  
-  IS3N.DE:
-    monthly_contribution: 150.0
-    monthly_savings: 75.0
+  IS3N.DE: # iShares Core MSCI Emerging Markets IMI UCITS ETF (Acc) IE00BKM4GZ66 bis 10%
+    monthly_contribution: 20.0
+    monthly_savings: 10.0
+
+  IQQ6.DE: # SXRA.DE: # iShares Developed Markets Property Yield UCITS ETF IE00B1FZS350 bis 5%
+    monthly_contribution: 10.0
+    monthly_savings: 5.0
