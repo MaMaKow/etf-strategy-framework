@@ -5,6 +5,13 @@ from datetime import datetime
 import requests
 import os
 from dotenv import load_dotenv
+import time
+import sys
+from typing import Optional
+
+# Hilfsmodule für Chart-Erzeugung und Telegram-Upload
+from etf.plotting import create_price_plot
+from etf.telegram_utils import send_photo_bytes
 
 load_dotenv()
 
@@ -84,6 +91,66 @@ def send_telegram(message: str) -> None:
         resp.raise_for_status()
     except requests.RequestException as e:
         print(f"⚠️  Telegram-Fehler: {e}")
+
+
+def _get_updates(offset: Optional[int] = None, timeout: int = 20):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+    params = {"timeout": timeout}
+    if offset:
+        params["offset"] = offset
+    try:
+        resp = requests.get(url, params=params, timeout=timeout + 5)
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("ok"):
+            return []
+        return data.get("result", [])
+    except requests.RequestException as e:
+        print(f"⚠️ Fehler beim Abrufen von Updates: {e}")
+        return []
+
+
+def _process_update(update: dict):
+    message = update.get("message") or update.get("edited_message")
+    if not message:
+        return
+    text = message.get("text", "").strip()
+    if not text.startswith("/chart"):
+        return
+    chat = message.get("chat", {})
+    chat_id = chat.get("id")
+    parts = text.split()
+    if len(parts) < 2:
+        send_telegram("Usage: /chart <TICKER> [WOCHEN]")
+        return
+    ticker = parts[1].upper()
+    weeks = 12
+    if len(parts) >= 3:
+        try:
+            weeks = int(parts[2])
+            weeks = max(1, min(52, weeks))
+        except ValueError:
+            weeks = 12
+    send_telegram(f"Erzeuge Chart für {ticker} ({weeks} Wochen)...")
+    buf = create_price_plot(ticker, weeks=weeks)
+    if buf is None:
+        send_telegram(f"⚠️ Keine Kursdaten für {ticker} — Grafik konnte nicht erstellt werden.")
+        return
+    ok = send_photo_bytes(TELEGRAM_TOKEN, str(chat_id), buf, caption=f"Kurs {ticker} — letzte {weeks} Wochen")
+    if not ok:
+        send_telegram(f"⚠️ Fehler beim Senden des Diagramms für {ticker}.")
+
+
+def poll_telegram_commands():
+    """Einfacher Polling-Loop für Telegram getUpdates. CLI-Flag --poll-commands startet ihn."""
+    offset = None
+    print("Starte Telegram-Command-Poller (getUpdates)...")
+    while True:
+        updates = _get_updates(offset=offset, timeout=30)
+        for u in updates:
+            _process_update(u)
+            offset = u["update_id"] + 1
+        time.sleep(1)
 
 
 def get_vix() -> float:
@@ -324,7 +391,13 @@ if __name__ == "__main__":
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print("⚠️  Umgebungsvariablen fehlen – prüfe die .env Datei!")
     try:
-        evaluate_signals()
+        if "--poll-commands" in sys.argv:
+            poll_telegram_commands()
+        else:
+            evaluate_signals()
     except Exception as e:
-        send_telegram(f"⚠️ Bot-Fehler: {str(e)}")
+        try:
+            send_telegram(f"⚠️ Bot-Fehler: {str(e)}")
+        except Exception:
+            print(f"⚠️ Bot-Fehler: {e}")
         raise
