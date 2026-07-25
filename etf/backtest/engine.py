@@ -57,7 +57,11 @@ class BacktestEngine:
 
             orders = self.strategy.on_day(market_state, self.portfolio.state)
             for order in orders:
-                trade = self.portfolio.execute_order(order)
+                try:
+                    trade = self.portfolio.execute_order(order)
+                except ValueError as valueError:
+                    self.logger.info(str(valueError))
+                    continue
                 trades.append(trade)
                 if order.cooldown_days is not None:
                     self.portfolio.set_cooldown(order.tier, order.cooldown_days)
