@@ -131,12 +131,11 @@ def _process_update(update: dict):
             weeks = max(1, min(52, weeks))
         except ValueError:
             weeks = 12
-    send_telegram(f"Erzeuge Chart für {ticker} ({weeks} Wochen)...")
     buf = create_price_plot(ticker, weeks=weeks)
     if buf is None:
         send_telegram(f"⚠️ Keine Kursdaten für {ticker} — Grafik konnte nicht erstellt werden.")
         return
-    ok = send_photo_bytes(TELEGRAM_TOKEN, str(chat_id), buf, caption=f"Kurs {ticker} — letzte {weeks} Wochen")
+    ok = send_photo_bytes(TELEGRAM_TOKEN, str(chat_id), buf, caption=f"Kurs {ticker} — langfristiger Trend und 30-Tage-Fokus")
     if not ok:
         send_telegram(f"⚠️ Fehler beim Senden des Diagramms für {ticker}.")
 

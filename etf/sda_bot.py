@@ -379,16 +379,13 @@ class SDABot:
             print(f"⚠️ Telegram-Fehler beim Senden des Bildes: {e}")
 
     def send_price_chart(self, etf_ticker: str, weeks: int = 12, caption: str | None = None) -> None:
-        """Erzeugt ein Kursdiagramm der letzten `weeks` Wochen und sendet es via Telegram.
-
-        Wenn keine Daten verfügbar sind, wird stattdessen eine Textnachricht gesendet.
-        """
+        """Erzeugt ein kombiniertes Chart-Bild und sendet es als einzelne Telegram-Nachricht."""
         buf = create_price_plot(etf_ticker, weeks=weeks)
         if buf is None:
             self.send_telegram(f"⚠️ Keine Kursdaten für {etf_ticker} — Grafik konnte nicht erstellt werden.")
             return
 
-        cap = caption if caption is not None else f"Kurs {etf_ticker} — letzte {weeks} Wochen"
+        cap = caption if caption is not None else f"Kurs {etf_ticker} — Trend und Fokus"
         self.send_telegram_photo(buf, cap)
 
     def log_and_notify(self, etf_ticker: str, date: date, recommendation: str, reason: str = "", market_data: Dict[str, Any] = None) -> None:
@@ -406,7 +403,11 @@ class SDABot:
         log_signal(signal)
 
         message = f"*SDA-Bot für {etf_ticker}*\n\n{reason}"
-        self.send_telegram(message)
+        chart_buf = create_price_plot(etf_ticker, weeks=4)
+        if chart_buf is None:
+            self.send_telegram(message)
+            return
+        self.send_telegram_photo(chart_buf, caption=message)
 
     def get_market_state(self, etf_ticker: str, current_date: date) -> Optional[MarketState]:
         """Holt Marktdaten und erstellt MarketState."""
@@ -499,11 +500,6 @@ class SDABot:
         if not market_state:
             reason = "Nicht genügend Marktdaten verfügbar."
             self.log_and_notify(etf_ticker, current_date, "HOLD", reason=reason, market_data={})
-            # Versuche zusätzlich, ein Chart zu senden (falls Daten für einen kurzen Zeitraum vorhanden sind)
-            try:
-                self.send_price_chart(etf_ticker, weeks=4, caption=f"Kurs {etf_ticker} — letzte 4 Wochen")
-            except Exception as e:
-                print(f"⚠️ Fehler beim Senden des Chart für {etf_ticker}: {e}")
             return reason
 
         # WICHTIG: Monatliche Einzahlung MUSS verbucht werden, BEVOR die Strategie
@@ -618,13 +614,11 @@ class SDABot:
         message += f"• Einheiten: {bot_state.units:.4f}\n"
         message += f"• Portfolio-Wert: {bot_state.portfolio_value:.2f} €"
 
-        self.send_telegram(message)
-
-        # Immer ein Kursdiagramm mitsenden (Standard: 4 Wochen)
-        try:
-            self.send_price_chart(etf_ticker, weeks=4, caption=f"Kurs {etf_ticker} — letzte 4 Wochen")
-        except Exception as e:
-            print(f"⚠️ Fehler beim Erstellen/Senden des Chart für {etf_ticker}: {e}")
+        chart_buf = create_price_plot(etf_ticker, weeks=4)
+        if chart_buf is not None:
+            self.send_telegram_photo(chart_buf, caption=message)
+        else:
+            self.send_telegram(message)
 
         return reason
 

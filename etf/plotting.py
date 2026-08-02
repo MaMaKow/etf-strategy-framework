@@ -1,62 +1,76 @@
 from io import BytesIO
-from datetime import datetime, timedelta
+from typing import Optional, Tuple
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import yfinance as yf
 import pandas as pd
 
 
-def create_price_plot(ticker: str, weeks: int = 12) -> BytesIO | None:
-    """Lädt Kursdaten der letzten `weeks` Wochen (inkl. SMA) und gibt ein PNG-BytesIO zurück.
+def prepare_plot_data(df: pd.DataFrame) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    """Bereitet die Daten für ein 5-Jahres-Hauptchart und ein 30-Tage-Inset vor."""
+    if df is None or df.empty:
+        return None, None
 
-    Rückgabe: BytesIO (PNG) oder None, wenn keine Daten vorhanden sind.
-    """
+    close = df["Close"].squeeze()
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+
+    close = pd.Series(close, index=df.index).astype(float).sort_index().dropna()
+    if close.empty:
+        return None, None
+
+    sma50 = close.rolling(50, min_periods=50).mean()
+    sma200 = close.rolling(200, min_periods=200).mean()
+
+    full_df = pd.DataFrame({"Close": close, "SMA50": sma50, "SMA200": sma200})
+    df_5y = full_df.tail(1260)
+    df_30d = full_df.tail(30)
+
+    return df_5y, df_30d
+
+
+def create_price_plot(ticker: str, weeks: int = 12) -> BytesIO | None:
+    """Erstellt ein kombiniertes Inset-Chart-Bild mit 5-Jahres-Trend und 30-Tage-Fokus."""
     try:
-        sma_window = 200
-        display_days = max(7, weeks * 7)
-        # Zusätzlichen Vorlauf laden, damit der SMA schon am ersten Anzeigetag
-        # einen validen Wert hat (Handelstage ≈ Kalendertage * 5/7, plus Puffer)
-        lookback_days = display_days + int(sma_window * 7 / 5) + 15
-        df = yf.download(ticker, period=f"{lookback_days}d", auto_adjust=True)
+        df = yf.download(ticker, period="6y", auto_adjust=True)
         if df.empty:
             return None
 
-        close = df["Close"].squeeze()
-        sma200 = close.rolling(sma_window).mean()
-        sma50 = close.rolling(50).mean()
-
-        # Erst jetzt auf den gewünschten Anzeigezeitraum zuschneiden
-        cutoff = pd.Timestamp.now(tz=close.index.tz) - pd.Timedelta(days=display_days)
-        close = close[close.index >= cutoff]
-        sma200 = sma200[sma200.index >= cutoff]
-        sma50 = sma50[sma50.index >= cutoff]
-
-        if close.empty:
+        plot_frames = prepare_plot_data(df)
+        if plot_frames[0] is None or plot_frames[1] is None:
             return None
 
-        dates = pd.to_datetime(close.index)
-        prices = close.values
+        df_5y, df_30d = plot_frames
+        if df_5y.empty or df_30d.empty:
+            return None
 
-        price_min = min(prices.min(), sma200.min(), sma50.min())
-        price_max = max(prices.max(), sma200.max(), sma50.max())
-        margin = (price_max - price_min) * 0.05 or price_max * 0.01
+        fig = plt.figure(figsize=(12, 6))
+        main_ax = fig.add_subplot(111)
+        main_ax.plot(df_5y.index, df_5y["Close"], color="#1f77b4", linewidth=2, label="Close")
+        main_ax.plot(df_5y.index, df_5y["SMA50"], color="#e74c3c", linewidth=1.3, linestyle="--", label="SMA50")
+        main_ax.plot(df_5y.index, df_5y["SMA200"], color="#3fa7e4", linewidth=1.2, linestyle=":", label="SMA200")
+        main_ax.set_title(f"{ticker} — Langfristiger Trend (60 Monate)", fontsize=13)
+        main_ax.set_ylabel("Preis", fontsize=10)
+        main_ax.grid(alpha=0.25)
+        main_ax.legend(loc="upper left", frameon=False, fontsize=8)
+        main_ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+        main_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        plt.setp(main_ax.get_xticklabels(), rotation=45, ha="right")
 
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(dates, prices, color="#1f77b4", linewidth=2, label="Kurs")
-        ax.plot(sma50.index, sma50.values, color="#6fd7ff", linewidth=1.2, linestyle="--", label=f"SMA50")
-        ax.plot(sma200.index, sma200.values, color="#3fa7e4", linewidth=0.8, linestyle=":", label=f"SMA{sma_window}")
-        # Fläche nur bis knapp unter das Minimum füllen, nicht bis 0
-        ax.fill_between(dates, prices, price_min - margin, color="#1f77b4", alpha=0.07)
-        ax.set_ylim(price_min - margin, price_max + margin)
-        ax.set_title(f"{ticker} — Kurs der letzten {weeks} Wochen")
-        ax.set_ylabel("Preis")
-        ax.grid(alpha=0.25)
-        ax.legend(loc="upper left", frameon=False, fontsize=8)
-        fig.autofmt_xdate()
+        inset_ax = fig.add_axes([0.17, 0.56, 0.30, 0.24])
+        inset_ax.plot(df_30d.index, df_30d["Close"], color="#1f77b4", linewidth=1.8)
+        inset_ax.plot(df_30d.index, df_30d["SMA50"], color="#e74c3c", linewidth=1.1, linestyle="--", label="SMA50")
+        inset_ax.set_title("Fokus: Letzte 30 Tage", fontsize=9)
+        inset_ax.grid(alpha=0.25)
+        inset_ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m"))
+        plt.setp(inset_ax.get_xticklabels(), rotation=45, ha="right")
+
+        fig.subplots_adjust(left=0.08, right=0.98, top=0.90, bottom=0.16)
 
         buf = BytesIO()
-        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+        fig.savefig(buf, format="png", dpi=160, bbox_inches="tight")
         plt.close(fig)
         buf.seek(0)
         return buf
