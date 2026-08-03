@@ -98,14 +98,11 @@ def get_etf_config(etf_ticker: str, full_config: Dict[str, Any]) -> Dict[str, An
     global_params = full_config.get("global", {})
     etf_params = full_config.get("etfs", {}).get(etf_ticker, {})
 
-    metadata = {key: etf_params.get(key) for key in ETF_METADATA_KEYS if key in etf_params}
-
     # Merge: globale Parameter als Basis, ETF-spezifische überschreiben
     merged_config = {**global_params, **etf_params}
     for key in ETF_METADATA_KEYS:
         merged_config.pop(key, None)
     merged_config["etf_ticker"] = etf_ticker
-    merged_config["__metadata__"] = metadata
 
     return merged_config
 
