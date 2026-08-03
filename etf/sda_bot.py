@@ -3,6 +3,7 @@ import json
 import yaml
 import mysql.connector
 from datetime import datetime, date
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 
@@ -21,16 +22,72 @@ from .telegram_utils import send_photo_bytes
 
 load_dotenv()
 
+
+def lookup_etf_metadata(ticker: str) -> Dict[str, Optional[str]]:
+    """Versucht, ETF-Metadaten über yfinance zu ermitteln."""
+    try:
+        info = yf.Ticker(ticker).info or {}
+    except Exception as exc:
+        print(f"⚠️ Konnte ETF-Metadaten für {ticker} nicht laden: {exc}")
+        return {}
+
+    full_name = info.get("longName") or info.get("shortName") or info.get("displayName")
+    isin = info.get("isin")
+    website = info.get("website") or info.get("websiteUrl") or info.get("companyOfficers")
+
+    metadata: Dict[str, Optional[str]] = {}
+    if full_name:
+        metadata["full_name"] = full_name
+    if isin:
+        metadata["isin"] = isin
+    if website:
+        metadata["info_url"] = website
+    return metadata
+
+
+def enrich_bot_config(config: Dict[str, Any], config_path: str = "bot_config.yaml") -> Dict[str, Any]:
+    """Ergänzt ETF-Metadaten in der Bot-Konfiguration und schreibt sie zurück in die YAML-Datei."""
+    if not isinstance(config, dict):
+        return config
+
+    etfs = config.get("etfs")
+    if not isinstance(etfs, dict):
+        return config
+
+    changed = False
+    for ticker, ticker_config in etfs.items():
+        if not isinstance(ticker_config, dict):
+            continue
+
+        if any(key in ticker_config for key in ("full_name", "isin", "info_url")):
+            continue
+
+        metadata = lookup_etf_metadata(ticker)
+        if not metadata:
+            continue
+
+        ticker_config.update(metadata)
+        changed = True
+
+    if changed and config_path:
+        path = Path(config_path)
+        with path.open("w", encoding="utf-8") as handle:
+            yaml.safe_dump(config, handle, sort_keys=False, allow_unicode=True)
+            handle.write("\n")
+
+    return config
+
+
 def load_bot_config(config_path: str = "bot_config.yaml") -> Dict[str, Any]:
     """Lädt die Bot-Konfiguration aus einer YAML-Datei."""
     if os.path.exists(config_path):
         with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
+            config = yaml.safe_load(f) or {}
         print(f"✅ Konfiguration geladen aus {config_path}")
-        return config
+        return enrich_bot_config(config, config_path)
     else:
         print(f"⚠️ Konfigurationsdatei {config_path} nicht gefunden, verwende Standardkonfiguration")
-        return BOT_CONFIG
+        return enrich_bot_config(BOT_CONFIG, config_path)
     
 def get_etf_config(etf_ticker: str, full_config: Dict[str, Any]) -> Dict[str, Any]:
     """Merged globale Parameter mit ETF-spezifischen Parametern."""
@@ -378,6 +435,35 @@ class SDABot:
         except Exception as e:
             print(f"⚠️ Telegram-Fehler beim Senden des Bildes: {e}")
 
+    def _build_notification_message(self, etf_ticker: str, reason: str) -> str:
+        """Erstellt eine Telegram-Nachricht mit ETF-Metadaten."""
+        message = f"*SDA-Bot für {etf_ticker}*"
+
+        etf_config = self.config.get("etfs", {}).get(etf_ticker, {}) if isinstance(self.config, dict) else {}
+        if not etf_config and isinstance(self.config, dict):
+            etf_config = self.config
+
+        metadata_lines: List[str] = []
+        full_name = etf_config.get("full_name") if isinstance(etf_config, dict) else None
+        if full_name:
+            metadata_lines.append(f"Name: {full_name}")
+
+        isin = etf_config.get("isin") if isinstance(etf_config, dict) else None
+        if isin:
+            metadata_lines.append(f"ISIN: {isin}")
+
+        info_url = etf_config.get("info_url") if isinstance(etf_config, dict) else None
+        if info_url:
+            metadata_lines.append(f"Info: {info_url}")
+
+        if metadata_lines:
+            message += "\n\nETF-Details:\n" + "\n".join(metadata_lines)
+
+        if reason:
+            message += f"\n\n{reason}"
+
+        return message
+
     def send_price_chart(self, etf_ticker: str, weeks: int = 12, caption: str | None = None) -> None:
         """Erzeugt ein kombiniertes Chart-Bild und sendet es als einzelne Telegram-Nachricht."""
         buf = create_price_plot(etf_ticker, weeks=weeks)
@@ -402,7 +488,7 @@ class SDABot:
         )
         log_signal(signal)
 
-        message = f"*SDA-Bot für {etf_ticker}*\n\n{reason}"
+        message = self._build_notification_message(etf_ticker, reason)
         chart_buf = create_price_plot(etf_ticker, weeks=4)
         if chart_buf is None:
             self.send_telegram(message)
@@ -602,7 +688,7 @@ class SDABot:
         log_signal(signal)
 
         # Nachricht erstellen
-        message = f"*SDA-Bot für {etf_ticker}*\n\n{reason}\n\n"
+        message = self._build_notification_message(etf_ticker, reason) + "\n\n"
         message += f"Marktdaten:\n"
         message += f"• Preis: {market_state.close:.2f} €\n"
         message += f"• Drawdown: {market_state.drawdown:.1%}\n"

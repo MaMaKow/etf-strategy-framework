@@ -36,6 +36,10 @@ etfs:
   SNAW.DE: # iShares MSCI World Screened UCITS ETF USD (Acc) IE00BFNM3J75 Ziel: 65 %
     monthly_contribution: 300.0
     monthly_savings: 150.0
+    # Optional, wird bei Bedarf automatisch ergänzt:
+    # full_name: "iShares MSCI World Screened UCITS ETF USD (Acc)"
+    # isin: "IE00BFNM3J75"
+    # info_url: "https://www.ishares.com/"
   
   IUSN.DE: # iShares MSCI World Small Cap UCITS ETF IE00BF4RFH31 bis 15%
     monthly_contribution: 30.0
