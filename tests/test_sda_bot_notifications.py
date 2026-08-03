@@ -52,3 +52,16 @@ def test_load_bot_config_enriches_missing_etf_metadata(tmp_path, monkeypatch):
 
     written_config = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
     assert written_config["etfs"]["TEST.DE"]["full_name"] == "Example ETF"
+
+
+def test_bot_initializes_when_metadata_fields_are_present():
+    bot = SDABot({
+        "etf_ticker": "TEST.DE",
+        "monthly_contribution": 10.0,
+        "full_name": "Example ETF",
+        "isin": "DE0001234567",
+        "info_url": "https://example.com/etf",
+    })
+
+    assert bot.sda_config.monthly_contribution == 10.0
+    assert bot.config["full_name"] == "Example ETF"

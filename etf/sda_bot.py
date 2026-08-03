@@ -23,6 +23,9 @@ from .telegram_utils import send_photo_bytes
 load_dotenv()
 
 
+ETF_METADATA_KEYS = ("full_name", "isin", "info_url")
+
+
 def lookup_etf_metadata(ticker: str) -> Dict[str, Optional[str]]:
     """Versucht, ETF-Metadaten über yfinance zu ermitteln."""
     try:
@@ -33,7 +36,7 @@ def lookup_etf_metadata(ticker: str) -> Dict[str, Optional[str]]:
 
     full_name = info.get("longName") or info.get("shortName") or info.get("displayName")
     isin = info.get("isin")
-    website = info.get("website") or info.get("websiteUrl") or info.get("companyOfficers")
+    website = info.get("website") or info.get("websiteUrl")
 
     metadata: Dict[str, Optional[str]] = {}
     if full_name:
@@ -59,7 +62,8 @@ def enrich_bot_config(config: Dict[str, Any], config_path: str = "bot_config.yam
         if not isinstance(ticker_config, dict):
             continue
 
-        if any(key in ticker_config for key in ("full_name", "isin", "info_url")):
+        existing_metadata = {key: ticker_config.get(key) for key in ETF_METADATA_KEYS if key in ticker_config}
+        if existing_metadata:
             continue
 
         metadata = lookup_etf_metadata(ticker)
@@ -93,11 +97,16 @@ def get_etf_config(etf_ticker: str, full_config: Dict[str, Any]) -> Dict[str, An
     """Merged globale Parameter mit ETF-spezifischen Parametern."""
     global_params = full_config.get("global", {})
     etf_params = full_config.get("etfs", {}).get(etf_ticker, {})
-    
+
+    metadata = {key: etf_params.get(key) for key in ETF_METADATA_KEYS if key in etf_params}
+
     # Merge: globale Parameter als Basis, ETF-spezifische überschreiben
     merged_config = {**global_params, **etf_params}
+    for key in ETF_METADATA_KEYS:
+        merged_config.pop(key, None)
     merged_config["etf_ticker"] = etf_ticker
-    
+    merged_config["__metadata__"] = metadata
+
     return merged_config
 
 def get_all_etf_tickers(full_config: Dict[str, Any]) -> List[str]:
@@ -396,8 +405,13 @@ class SDABot:
     def __init__(self, config: Optional[Dict[str, Any]] = None, config_path: str = "bot_config.yaml"):
         if config is None:
             config = load_bot_config(config_path)
+
+        sanitized_config = dict(config)
+        for key in ETF_METADATA_KEYS:
+            sanitized_config.pop(key, None)
+
         self.config = config
-        self.sda_config = SDAConfig(**self.config)
+        self.sda_config = SDAConfig(**sanitized_config)
         self.strategy = SDAStrategy(self.sda_config)
 
     def send_telegram(self, message: str) -> None:
